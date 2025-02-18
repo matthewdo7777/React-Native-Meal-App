@@ -1,0 +1,81 @@
+version: '3.0'
+
+services:
+  database:
+    container_name: mealdatabase
+    image: lscr.io/linuxserver/mariadb:10.6.12
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Edmonton
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD} 
+    ports:
+      - ${DB_PORT}:3306
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend:
+    container_name: sigmameals-backend
+    build:
+      context: ./backend
+    restart: unless-stopped
+    ports:
+      - ${PORT}:3000
+    depends_on:
+      - database
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: ${DB_PORT}
+      SECRET: ${SECRET}
+    volumes:
+      - ./backend:/usr/src/app
+      - node_modules:/usr/src/app/node_modules
+    networks:
+      - app-network
+
+  phpmyadmin:
+    image: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - 8085:80
+    environment:
+      PMA_ARBITRARY: 1
+      UPLOAD_LIMIT: 400M
+      MEMORY_LIMIT: 1G
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./sigmameals
+      dockerfile: Dockerfile
+    container_name: sigmameals-frontend
+    volumes:
+      - ./sigmameals:/app
+      - /app/node_modules
+    ports:
+      - "8081:8081"    # Metro bundler
+      - "19000:19000"  # Expo Go app connection
+      - "19006:19006"  # Expo web
+    environment:
+      - NODE_ENV=development
+      - EXPO_PACKAGER_HOSTNAME=0.0.0.0
+    
+
+volumes:
+  db_data:
+  node_modules:
+
+networks:
+  app-network:
+    driver: bridge
